@@ -1,13 +1,14 @@
 package com.example.geofencecmp
 
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.runtime.*
 
 @Composable
-@Preview
 fun App() {
-    MaterialTheme {
-        MainScreen()
+    var currentScreen by remember { mutableStateOf("login") }
+
+    when (currentScreen) {
+        "login" -> LoginScreen(onLoginSuccess = { currentScreen = "attendance" }, onNavigateToSignup = { currentScreen = "signup" })
+        "signup" -> SignupScreen(onSignupSuccess = { currentScreen = "login" }, onNavigateToLogin = { currentScreen = "login" })
+        "attendance" -> AttendanceScreen()
     }
 }

@@ -8,21 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Badge
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PersonOff
-import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.Work
-
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,57 +23,20 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-@Composable
-fun MainScreen() {
-    var currentScreen by remember { mutableStateOf("login") }
-    var selectedTab by remember { mutableStateOf(0) }
-
-    when (currentScreen) {
-        "login" -> LoginScreen(
-            onLoginSuccess = { currentScreen = "main" },
-            onNavigateToSignup = { currentScreen = "signup" }
-        )
-        "signup" -> SignupScreen(
-            onSignupSuccess = { currentScreen = "login" },
-            onNavigateToLogin = { currentScreen = "login" }
-        )
-        "main" -> {
-            Scaffold(
-                bottomBar = {
-                    NavigationBar {
-                        NavigationBarItem(
-                            selected = selectedTab == 0,
-                            onClick = { selectedTab = 0 },
-                            icon = { Icon(Icons.Default.LocationOn, contentDescription = "Attendance") },
-                            label = { Text("Attendance") }
-                        )
-                        NavigationBarItem(
-                            selected = selectedTab == 1,
-                            onClick = { selectedTab = 1 },
-                            icon = { Icon(Icons.Default.Dashboard, contentDescription = "Dashboard") },
-                            label = { Text("Dashboard") }
-                        )
-                    }
-                }
-            ) { padding ->
-                Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-                    if (selectedTab == 0) {
-                        AttendanceScreen()
-                    } else {
-                        ManagerDashboardScreen()
-                    }
-                }
-            }
-        }
-    }
-}
+import com.example.geofencecmp.auth.AuthService
+import com.example.geofencecmp.geofence.GeofenceManagerFactory
+import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(onLoginSuccess: () -> Unit, onNavigateToSignup: () -> Unit) {
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("ss@ss.com") }
+    var password by remember { mutableStateOf("123456") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+
+    val scope = rememberCoroutineScope()
+    val authService = remember { AuthService() }
 
     Column(
         modifier = Modifier
@@ -96,42 +45,43 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onNavigateToSignup: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            imageVector = Icons.Default.LocationOn,
-            contentDescription = null,
-            modifier = Modifier.size(100.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
         Text(
-            text = "GeoFence Attendance",
+            text = "Welcome Back!",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
-        
+
         Spacer(modifier = Modifier.height(8.dp))
-        
+
         Text(
-            text = "Sign in to continue",
+            text = "Login to your account",
             style = MaterialTheme.typography.bodyMedium,
             color = Color.Gray
         )
-        
+
         Spacer(modifier = Modifier.height(32.dp))
-        
+
+        if (errorMessage != null) {
+            Text(
+                text = errorMessage!!,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+        }
+
         OutlinedTextField(
-            value = username,
-            onValueChange = { username = it },
-            label = { Text("Username") },
-            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+            value = email,
+            onValueChange = { email = it },
+            label = { Text("Email") },
+            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
         )
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
@@ -150,20 +100,41 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onNavigateToSignup: () -> Unit) {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             singleLine = true
         )
-        
+
         Spacer(modifier = Modifier.height(32.dp))
-        
+
         Button(
-            onClick = onLoginSuccess,
+            onClick = {
+                isLoading = true
+                errorMessage = null
+                scope.launch {
+                    val result = authService.signIn(email, password)
+                    isLoading = false
+                    if (result.isSuccess) {
+                        onLoginSuccess()
+                    } else {
+                        errorMessage = result.exceptionOrNull()?.message ?: "Login failed"
+                    }
+                }
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
-            shape = RoundedCornerShape(8.dp)
+            shape = RoundedCornerShape(8.dp),
+            enabled = !isLoading
         ) {
-            Text("LOGIN")
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Text("LOGIN")
+            }
         }
 
-        TextButton(onClick = onNavigateToSignup) {
+        TextButton(onClick = onNavigateToSignup, enabled = !isLoading) {
             Text("Don't have an account? Sign Up")
         }
     }
@@ -171,14 +142,20 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onNavigateToSignup: () -> Unit) {
 
 @Composable
 fun SignupScreen(onSignupSuccess: () -> Unit, onNavigateToLogin: () -> Unit) {
-    var fullName by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-    var mobileNumber by remember { mutableStateOf("") }
-    var empId by remember { mutableStateOf("") }
-    var designation by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
+    var fullName by remember { mutableStateOf("Shiv") }
+    var email by remember { mutableStateOf("ss3@ss.com") }
+    var mobileNumber by remember { mutableStateOf("9879879879") }
+    var empId by remember { mutableStateOf("GEO_987") }
+    var designation by remember { mutableStateOf("Associate") }
+    var password by remember { mutableStateOf("123456") }
+    var confirmPassword by remember { mutableStateOf("123456") }
     var passwordVisible by remember { mutableStateOf(false) }
+
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+
+    val scope = rememberCoroutineScope()
+    val authService = remember { AuthService() }
 
     LazyColumn(
         modifier = Modifier
@@ -201,6 +178,17 @@ fun SignupScreen(onSignupSuccess: () -> Unit, onNavigateToLogin: () -> Unit) {
                     text = "Join GeoFence Attendance",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.Gray
+                )
+            }
+        }
+
+        if (errorMessage != null) {
+            item {
+                Text(
+                    text = errorMessage!!,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(vertical = 8.dp)
                 )
             }
         }
@@ -299,16 +287,51 @@ fun SignupScreen(onSignupSuccess: () -> Unit, onNavigateToLogin: () -> Unit) {
         item {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Button(
-                    onClick = onSignupSuccess,
+                    onClick = {
+                        if (password != confirmPassword) {
+                            errorMessage = "Passwords do not match"
+                            return@Button
+                        }
+                        
+                        isLoading = true
+                        errorMessage = null
+                        
+                        scope.launch {
+                            val result = authService.signUp(
+                                name = fullName,
+                                email = email,
+                                mobile = mobileNumber,
+                                emp_id = empId,
+                                designation = designation,
+                                pass = password
+                            )
+                            
+                            isLoading = false
+                            if (result.isSuccess) {
+                                onSignupSuccess()
+                            } else {
+                                errorMessage = result.exceptionOrNull()?.message ?: "Signup failed"
+                            }
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    enabled = !isLoading
                 ) {
-                    Text("SIGN UP")
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("SIGN UP")
+                    }
                 }
 
-                TextButton(onClick = onNavigateToLogin) {
+                TextButton(onClick = onNavigateToLogin, enabled = !isLoading) {
                     Text("Already have an account? Login")
                 }
             }
@@ -318,8 +341,21 @@ fun SignupScreen(onSignupSuccess: () -> Unit, onNavigateToLogin: () -> Unit) {
 
 @Composable
 fun AttendanceScreen() {
-    var isInsideGeofence by remember { mutableStateOf(false) } // This would be driven by Proximity Engine
+  //  val locationService = remember { LocationService() }
+   // val currentLocation by locationService.getCurrentLocation()
+    var isInsideGeofence by remember { mutableStateOf(false) }
     var isCheckedIn by remember { mutableStateOf(false) }
+
+   /* currentLocation?.let {
+        val distance = distanceBetween(
+            it.latitude,
+            it.longitude,
+            17.489714,
+            78.331193
+        )
+        isInsideGeofence = distance < 10f
+    }*/
+
 
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -371,7 +407,13 @@ fun AttendanceScreen() {
             contentAlignment = Alignment.Center
         ) {
             Button(
-                onClick = { isCheckedIn = !isCheckedIn },
+                onClick = {
+                    isCheckedIn = !isCheckedIn
+                    GeofenceManagerFactory.create().addGeofence( id = "SITE_A",
+                        lat = 17.489714, // Replace with your lat
+                        lng = 78.331193, // Replace with your lng
+                        radius = 10f )
+                          },
                 enabled = isInsideGeofence,
                 modifier = Modifier.fillMaxSize(),
                 shape = CircleShape,
